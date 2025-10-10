@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # ANTES DE EXECUTAR: Ajuste as variáveis abaixo para o seu ambiente
-FHIR_SERVER_DIR="/caminho/para/hapi-fhir-jpaserver-starter"  # Ajuste para onde está o servidor HAPI FHIR
+FHIR_SERVER_DIR="C:\Users\Computador\Desktop\Projetos\UBIQUO\hapi-fhir-jpaserver-starter"  # Ajuste para onde está o servidor HAPI FHIR
 APP_DIR="$(cd "$(dirname "$0")" && pwd)"  # Diretório deste script (automático)
 
 echo "=============================================="
