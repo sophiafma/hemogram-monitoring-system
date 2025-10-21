@@ -1,103 +1,133 @@
 #!/bin/bash
 
-APP_DIR="$(cd "$(dirname "$0")" && pwd)"
+# =============================================================================
+# SCRIPT DE SIMULAÇÃO DE ENVIO EM MASSA DE HEMOGRAMAS (VERSÃO DIRETA)
+# -----------------------------------------------------------------------------
+# Este script envia múltiplos hemogramas diretamente para o endpoint de teste
+# da aplicação (/fhir/direct-test), ignorando o servidor FHIR.
+# Isso é útil para testar a lógica de processamento e análise da aplicação
+# de forma isolada.
+# =============================================================================
 
-echo "=============================================="
-echo "🧪 TESTANDO SUBSCRIPTION FHIR"
-echo "=============================================="
+# --- CONFIGURAÇÕES ---
+APP_URL="http://localhost:8081"
+ENDPOINT="/fhir/direct-test"
+TARGET_URL="${APP_URL}${ENDPOINT}"
+CONTENT_TYPE="application/json"
+
+# Número de hemogramas a serem enviados
+NUM_HEMOGRAMS=10
+
+# Atraso entre os envios (em segundos)
+DELAY=1
+
+# --- INÍCIO DO SCRIPT ---
+echo "======================================================"
+echo "💉 SIMULADOR DE ENVIO DIRETO DE HEMOGRAMAS"
+echo "======================================================"
 echo ""
 
-# Verificar se os servidores estão rodando
-echo "📡 Verificando servidores..."
-if ! curl -s http://localhost:8080/fhir/metadata > /dev/null 2>&1; then
-    echo "❌ Servidor FHIR não está rodando!"
-    echo "   Execute: bash start-with-fhir-server.sh"
+# 1. Verificar se a aplicação está rodando
+echo "📡 Verificando se a aplicação está rodando em ${APP_URL}..."
+# Tenta um endpoint comum do Spring Actuator, se não existir, usa o swagger como fallback
+if ! curl -s --head ${APP_URL}/actuator/health > /dev/null 2>&1 && ! curl -s ${APP_URL}/swagger-ui.html > /dev/null 2>&1; then
+    echo "❌ Aplicação não está rodando ou não está acessível!"
+    echo "   Por favor, inicie a aplicação Spring Boot antes de rodar este script."
     exit 1
 fi
-
-if ! curl -s http://localhost:8081/swagger-ui.html > /dev/null 2>&1; then
-    echo "❌ Aplicação não está rodando!"
-    echo "   Execute: bash start-with-fhir-server.sh"
-    exit 1
-fi
-
-echo "✅ Ambos os servidores estão rodando"
+echo "✅ Aplicação está rodando!"
+echo ""
+echo "🎯 Alvo do teste: ${TARGET_URL}"
+echo "📦 Total de hemogramas a enviar: ${NUM_HEMOGRAMS}"
 echo ""
 
-# Verificar status da subscription
-echo "🔔 Verificando status da subscription..."
-curl -s http://localhost:8081/admin/subscription/status | python3 -m json.tool 2>/dev/null || curl -s http://localhost:8081/admin/subscription/status
-echo ""
-echo ""
+# 2. Loop para enviar os hemogramas
+for i in $(seq 1 $NUM_HEMOGRAMS)
+do
+    echo "------------------------------------------------------"
+    echo "📤 Enviando Hemograma #${i} de ${NUM_HEMOGRAMS}..."
 
-# Enviar hemograma com PLAQUETAS BAIXAS (alerta de dengue)
-echo "=============================================="
-echo "📤 TESTE 1: Enviando hemograma com DENGUE"
-echo "=============================================="
-echo "Paciente com plaquetas em 80.000 /µL (ALERTA!)"
-echo ""
+    # Gerar dados dinâmicos
+    PATIENT_ID="sim-patient-$(printf "%03d" $i)"
+    PATIENT_NAME="Paciente Simulado $(printf "%03d" $i)"
+    PATIENT_CPF=$(shuf -i 10000000000-99999999999 -n 1)
+    PATIENT_PHONE="629$(shuf -i 80000000-99999999 -n 1)"
+    TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
-curl -X POST http://localhost:8080/fhir/Observation \
-  -H "Content-Type: application/fhir+json" \
-  -d '{
+    # Gerar valor de plaquetas aleatório com distribuição
+    # 1/3 de chance de ser DENGUE, 1/3 NORMAL, 1/3 ALTO
+    RAND_CASE=$((RANDOM % 3))
+    if [ $RAND_CASE -eq 0 ]; then
+        # CASO DENGUE
+        PLAQUETAS=$(shuf -i 20000-149000 -n 1)
+        STATUS="⚠️ DENGUE"
+    elif [ $RAND_CASE -eq 1 ]; then
+        # CASO NORMAL
+        PLAQUETAS=$(shuf -i 150000-450000 -n 1)
+        STATUS="✅ NORMAL"
+    else
+        # CASO ALTO (apenas para variar os dados)
+        PLAQUETAS=$(shuf -i 451000-600000 -n 1)
+        STATUS="⬆️ ALTO"
+    fi
+
+    echo "   Paciente: ${PATIENT_NAME} (CPF: ${PATIENT_CPF})"
+    echo "   Plaquetas: ${PLAQUETAS} /µL (${STATUS})"
+
+    # Construir o JSON FHIR com o recurso Patient contido
+    JSON_PAYLOAD=$(cat <<EOF
+{
     "resourceType": "Observation",
+    "id": "hemograma-sim-${i}",
     "status": "final",
+    "contained": [
+        {
+            "resourceType": "Patient",
+            "id": "${PATIENT_ID}",
+            "name": [{"text": "${PATIENT_NAME}"}],
+            "identifier": [{
+                "system": "urn:oid:2.16.840.1.113883.4.642.3.1",
+                "value": "${PATIENT_CPF}"
+            }],
+            "telecom": [{
+                "system": "phone",
+                "value": "${PATIENT_PHONE}"
+            }]
+        }
+    ],
     "code": {
-      "coding": [{
-        "system": "http://loinc.org",
-        "code": "777-3",
-        "display": "Platelets"
-      }]
+        "coding": [{
+            "system": "http://loinc.org",
+            "code": "777-3",
+            "display": "Platelets"
+        }]
     },
-    "subject": {"reference": "Patient/dengue-001"},
-    "effectiveDateTime": "2025-10-08T10:00:00Z",
-    "valueQuantity": {"value": 80000, "unit": "/µL"}
-  }' -s | python3 -m json.tool 2>/dev/null || echo "Enviado!"
+    "subject": {"reference": "#${PATIENT_ID}"},
+    "effectiveDateTime": "${TIMESTAMP}",
+    "valueQuantity": {"value": ${PLAQUETAS}, "unit": "/µL"}
+}
+EOF
+)
+
+    # Enviar a requisição POST diretamente para a aplicação
+    curl -s -X POST "${TARGET_URL}" \
+         -H "Content-Type: ${CONTENT_TYPE}" \
+         -d "${JSON_PAYLOAD}" > /dev/null
+
+    echo "   Enviado com sucesso!"
+    sleep $DELAY
+done
 
 echo ""
-echo "⏳ Aguardando notificação via subscription..."
-sleep 3
-
-echo ""
-echo "=============================================="
-echo "📤 TESTE 2: Enviando hemograma NORMAL"
-echo "=============================================="
-echo "Paciente com plaquetas em 250.000 /µL (NORMAL)"
-echo ""
-
-curl -X POST http://localhost:8080/fhir/Observation \
-  -H "Content-Type: application/fhir+json" \
-  -d '{
-    "resourceType": "Observation",
-    "status": "final",
-    "code": {
-      "coding": [{
-        "system": "http://loinc.org",
-        "code": "777-3"
-      }]
-    },
-    "subject": {"reference": "Patient/normal-001"},
-    "effectiveDateTime": "2025-10-08T10:01:00Z",
-    "valueQuantity": {"value": 250000, "unit": "/µL"}
-  }' -s | python3 -m json.tool 2>/dev/null || echo "Enviado!"
-
-echo ""
-echo "⏳ Aguardando notificação via subscription..."
-sleep 3
-
-echo ""
-echo "=============================================="
+echo "======================================================"
 echo "✅ TESTES CONCLUÍDOS!"
-echo "=============================================="
+echo "======================================================"
 echo ""
 echo "📋 O que aconteceu:"
-echo "   1. Enviamos 2 hemogramas ao servidor FHIR (porta 8080)"
-echo "   2. O servidor FHIR notificou automaticamente nossa aplicação"
-echo "   3. Nossa aplicação (porta 8081) processou e detectou dengue no primeiro"
+echo "   1. Este script enviou ${NUM_HEMOGRAMS} hemogramas com dados variados."
+echo "   2. Os dados foram enviados DIRETAMENTE para a sua aplicação na porta 8081."
+echo "   3. O servidor FHIR não foi utilizado neste teste."
 echo ""
-echo "🔍 Para ver os resultados:"
-echo "   tail -30 $APP_DIR/app.log | grep -A 5 'NOTIFICAÇÃO'"
+echo "🔍 Para ver os resultados, verifique os logs da sua aplicação Spring Boot."
 echo ""
-echo "   Ou abra os logs completos:"
-echo "   tail -f $APP_DIR/app.log"
-echo ""
+

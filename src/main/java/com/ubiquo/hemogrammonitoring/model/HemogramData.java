@@ -10,6 +10,15 @@ public class HemogramData {
     
     @JsonProperty("patientId")
     private String patientId;
+
+    @JsonProperty("patientName")
+    private String patientName; 
+
+    @JsonProperty("patientCpf")
+    private String patientCpf; 
+
+    @JsonProperty("patientPhone")
+    private String patientPhone; 
     
     @JsonProperty("timestamp")
     private LocalDateTime timestamp;
@@ -31,12 +40,15 @@ public class HemogramData {
     
     // Construtores
     public HemogramData() {}
-    
-    public HemogramData(String id, String patientId, LocalDateTime timestamp, 
-                       Double leucocitos, Double hemoglobina, Double plaquetas, 
-                       Double hematocrito, String region) {
+
+    public HemogramData(String id, String patientId, String patientName, String patientCpf, String patientPhone,
+                        LocalDateTime timestamp, Double leucocitos, Double hemoglobina,
+                        Double plaquetas, Double hematocrito, String region) {
         this.id = id;
         this.patientId = patientId;
+        this.patientName = patientName;
+        this.patientCpf = patientCpf;
+        this.patientPhone = patientPhone;
         this.timestamp = timestamp;
         this.leucocitos = leucocitos;
         this.hemoglobina = hemoglobina;
@@ -60,6 +72,30 @@ public class HemogramData {
     
     public void setPatientId(String patientId) {
         this.patientId = patientId;
+    }
+
+    public String getPatientName() {
+        return patientName;
+    }
+
+    public void setPatientName(String patientName) {
+        this.patientName = patientName;
+    }
+
+    public String getPatientCpf() {
+        return patientCpf;
+    }
+
+    public void setPatientCpf(String patientCpf) {
+        this.patientCpf = patientCpf;
+    }
+
+    public String getPatientPhone() {
+        return patientPhone;
+    }
+
+    public void setPatientPhone(String patientPhone) {
+        this.patientPhone = patientPhone;
     }
     
     public LocalDateTime getTimestamp() {
@@ -109,12 +145,15 @@ public class HemogramData {
     public void setRegion(String region) {
         this.region = region;
     }
-    
+
     @Override
     public String toString() {
         return "HemogramData{" +
                 "id='" + id + '\'' +
                 ", patientId='" + patientId + '\'' +
+                ", patientName='" + patientName + '\'' +
+                ", patientCpf='" + patientCpf + '\'' +
+                ", patientPhone='" + patientPhone + '\'' +
                 ", timestamp=" + timestamp +
                 ", leucocitos=" + leucocitos +
                 ", hemoglobina=" + hemoglobina +

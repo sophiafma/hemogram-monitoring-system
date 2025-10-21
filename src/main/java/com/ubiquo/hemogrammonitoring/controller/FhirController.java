@@ -29,8 +29,22 @@ public class FhirController {
     
     @Autowired
     private FhirParserService fhirParserService;
-    
+
     @Operation(
+            summary = "Testa o parser diretamente",
+            description = "Endpoint para enviar um JSON FHIR diretamente para a aplicação, sem passar pelo servidor FHIR. Útil para depurar o parser."
+    )
+    @PostMapping("/direct-test")
+    public ResponseEntity<Map<String, Object>> testParserDirectly(@RequestBody String fhirJson) {
+        logger.info("=".repeat(80));
+        logger.info("📨 TESTE DIRETO RECEBIDO");
+        logger.info("=".repeat(80));
+
+        // Esta chamada reutiliza a mesma lógica do endpoint de subscription
+        return receiveFhirData(fhirJson);
+    }
+
+        @Operation(
         summary = "Recebe dados FHIR via subscription",
         description = "Endpoint para receber hemogramas em formato FHIR dos laboratórios. " +
                      "Processa o JSON, extrai os valores dos parâmetros hematológicos usando códigos LOINC " +
