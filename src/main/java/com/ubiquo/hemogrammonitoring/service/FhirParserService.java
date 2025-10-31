@@ -1,9 +1,11 @@
 package com.ubiquo.hemogrammonitoring.service;
 
+import com.ubiquo.hemogrammonitoring.entity.HemogramEntity;
 import com.ubiquo.hemogrammonitoring.model.HemogramData;
 import com.ubiquo.hemogrammonitoring.model.ReferenceValues;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.ubiquo.hemogrammonitoring.repository.HemogramRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -18,58 +20,48 @@ public class FhirParserService {
 
     private static final Logger logger = LoggerFactory.getLogger(FhirParserService.class);
     private final ObjectMapper objectMapper = new ObjectMapper();
+    private final HemogramRepository hemogramRepository;
+
+    public FhirParserService(HemogramRepository hemogramRepository) {
+        this.hemogramRepository = hemogramRepository;
+    }
 
     /**
-     * Processa um JSON FHIR e extrai dados do hemograma
+     * Processa um JSON FHIR, extrai dados do hemograma e o salva no banco de dados.
      */
     public HemogramData parseFhirObservation(String fhirJson) {
         try {
             JsonNode root = objectMapper.readTree(fhirJson);
 
-            // Extrair ID da observação
-            String observationId = root.path("id").asText();
+            String observationId = root.path("id").asText("N/A");
 
-            // Extrair ID do paciente
+            // Extrair dados do paciente contido no JSON
+            JsonNode containedPatient = findContainedPatient(root);
             String patientId = extractPatientId(root);
+            String patientName = extractContainedPatientName(containedPatient);
+            String patientCpf = extractContainedPatientCpf(containedPatient);
+            String patientPhone = extractContainedPatientPhone(containedPatient);
 
-            // Extrair dados do paciente contido (nome, cpf, telefone)
-            String patientName = extractContainedPatientName(root);
-            String patientCpf = extractContainedPatientCpf(root);
-            String patientPhone = extractContainedPatientPhone(root);
+            logger.info("Processando hemograma para o paciente: {} (CPF: {}, Tel: {})", patientName, patientCpf, patientPhone);
 
-            // Log para identificar o caso
-            logger.info("Processando hemograma para o paciente: {} (CPF: {}, Tel: {})",
-                    (patientName != null ? patientName : "N/A"),
-                    (patientCpf != null ? patientCpf : "N/A"),
-                    (patientPhone != null ? patientPhone : "N/A"));
-
-            // Extrair timestamp
             LocalDateTime timestamp = extractTimestamp(root);
+            String region = "Goiânia";
 
-            // Extrair região (mockado por enquanto)
-            String region = "Goiânia"; // TODO: Extrair da localização do paciente
-
-            // Extrair valores dos parâmetros hematológicos
             Double leucocitos = extractParameterValue(root, ReferenceValues.LEUCOCITOS_LOINC);
             Double hemoglobina = extractParameterValue(root, ReferenceValues.HEMOGLOBINA_LOINC);
             Double plaquetas = extractParameterValue(root, ReferenceValues.PLAQUETAS_LOINC);
             Double hematocrito = extractParameterValue(root, ReferenceValues.HEMATOCRITO_LOINC);
 
             HemogramData hemogramData = new HemogramData(
-                    observationId,
-                    patientId,
-                    patientName,
-                    patientCpf,
-                    patientPhone,
-                    timestamp,
-                    leucocitos,
-                    hemoglobina,
-                    plaquetas,
-                    hematocrito,
-                    region
+                    observationId, patientId, patientName, patientCpf, patientPhone,
+                    timestamp, leucocitos, hemoglobina, plaquetas, hematocrito, region
             );
 
             logger.info("Dados do hemograma extraídos: {}", hemogramData);
+
+            // Salvar no banco de dados
+            saveHemogram(hemogramData);
+
             return hemogramData;
 
         } catch (Exception e) {
@@ -79,83 +71,90 @@ public class FhirParserService {
     }
 
     /**
-     * Extrai o ID do paciente do recurso FHIR
+     * Salva os dados do hemograma no banco de dados.
      */
+    private void saveHemogram(HemogramData data) {
+        if (data == null) {
+            logger.warn("Tentativa de salvar um hemograma nulo.");
+            return;
+        }
+        try {
+            HemogramEntity entity = new HemogramEntity();
+            entity.setObservationId(data.getId());
+            entity.setPatientId(data.getPatientId());
+            entity.setPatientName(data.getPatientName());
+            entity.setPatientCpf(data.getPatientCpf());
+            entity.setPatientPhone(data.getPatientPhone());
+            entity.setTimestamp(data.getTimestamp());
+            entity.setLeucocitos(data.getLeucocitos());
+            entity.setHemoglobina(data.getHemoglobina());
+            entity.setPlaquetas(data.getPlaquetas());
+            entity.setHematocrito(data.getHematocrito());
+            entity.setRegion(data.getRegion());
+
+            hemogramRepository.save(entity);
+            logger.info("✅ Hemograma para o paciente '{}' (CPF: {}) salvo no banco de dados.", data.getPatientName(), data.getPatientCpf());
+        } catch (Exception e) {
+            logger.error("❌ Erro ao salvar hemograma no banco de dados para o paciente {}: {}", data.getPatientName(), e.getMessage(), e);
+        }
+    }
+
+    private JsonNode findContainedPatient(JsonNode root) {
+        JsonNode contained = root.path("contained");
+        if (contained.isArray()) {
+            for (JsonNode resource : contained) {
+                if ("Patient".equals(resource.path("resourceType").asText())) {
+                    return resource;
+                }
+            }
+        }
+        return null;
+    }
+
+    private String extractContainedPatientName(JsonNode patientNode) {
+        if (patientNode == null) return "Nome não encontrado";
+        return patientNode.path("name").get(0).path("text").asText("Nome não encontrado");
+    }
+
+    private String extractContainedPatientCpf(JsonNode patientNode) {
+        if (patientNode == null) return "CPF não encontrado";
+        JsonNode identifier = patientNode.path("identifier");
+        if (identifier.isArray()) {
+            for (JsonNode id : identifier) {
+                if ("urn:oid:2.16.840.1.113883.4.642.3.1".equals(id.path("system").asText())) {
+                    return id.path("value").asText("CPF não encontrado");
+                }
+            }
+        }
+        return "CPF não encontrado";
+    }
+
+    private String extractContainedPatientPhone(JsonNode patientNode) {
+        if (patientNode == null) return "Telefone não encontrado";
+        JsonNode telecom = patientNode.path("telecom");
+        if (telecom.isArray()) {
+            for (JsonNode contact : telecom) {
+                if ("phone".equals(contact.path("system").asText())) {
+                    return contact.path("value").asText("Telefone não encontrado");
+                }
+            }
+        }
+        return "Telefone não encontrado";
+    }
+
     private String extractPatientId(JsonNode root) {
         try {
-            return root.path("subject").path("reference").asText().replace("Patient/", "").replace("#", "");
+            String reference = root.path("subject").path("reference").asText();
+            if (reference.startsWith("#")) {
+                return reference.substring(1);
+            }
+            return reference.replace("Patient/", "");
         } catch (Exception e) {
             logger.warn("Não foi possível extrair ID do paciente: {}", e.getMessage());
             return "unknown";
         }
     }
 
-    /**
-     * Extrai o nome do paciente de um recurso Patient contido
-     */
-    private String extractContainedPatientName(JsonNode root) {
-        try {
-            JsonNode contained = root.path("contained");
-            if (contained.isArray() && !contained.isEmpty()) {
-                for (JsonNode resource : contained) {
-                    if ("Patient".equals(resource.path("resourceType").asText())) {
-                        return resource.path("name").get(0).path("text").asText();
-                    }
-                }
-            }
-        } catch (Exception e) {
-            logger.warn("Não foi possível extrair nome do paciente contido: {}", e.getMessage());
-        }
-        return null;
-    }
-
-    /**
-     * Extrai o CPF do paciente de um recurso Patient contido
-     */
-    private String extractContainedPatientCpf(JsonNode root) {
-        try {
-            JsonNode contained = root.path("contained");
-            if (contained.isArray() && !contained.isEmpty()) {
-                for (JsonNode resource : contained) {
-                    if ("Patient".equals(resource.path("resourceType").asText())) {
-                        JsonNode identifiers = resource.path("identifier");
-                        if (identifiers.isArray() && !identifiers.isEmpty()) {
-                            return identifiers.get(0).path("value").asText();
-                        }
-                    }
-                }
-            }
-        } catch (Exception e) {
-            logger.warn("Não foi possível extrair CPF do paciente contido: {}", e.getMessage());
-        }
-        return null;
-    }
-
-    /**
-     * Extrai o telefone do paciente de um recurso Patient contido
-     */
-    private String extractContainedPatientPhone(JsonNode root) {
-        try {
-            JsonNode contained = root.path("contained");
-            if (contained.isArray() && !contained.isEmpty()) {
-                for (JsonNode resource : contained) {
-                    if ("Patient".equals(resource.path("resourceType").asText())) {
-                        JsonNode telecoms = resource.path("telecom");
-                        if (telecoms.isArray() && !telecoms.isEmpty()) {
-                            return telecoms.get(0).path("value").asText();
-                        }
-                    }
-                }
-            }
-        } catch (Exception e) {
-            logger.warn("Não foi possível extrair telefone do paciente contido: {}", e.getMessage());
-        }
-        return null;
-    }
-
-    /**
-     * Extrai o timestamp da observação
-     */
     private LocalDateTime extractTimestamp(JsonNode root) {
         try {
             String dateString = root.path("effectiveDateTime").asText();
@@ -169,29 +168,15 @@ public class FhirParserService {
         }
     }
 
-    /**
-     * Extrai o valor de um parâmetro específico usando código LOINC
-     */
     private Double extractParameterValue(JsonNode root, String loincCode) {
         try {
-            // Primeiro, verifica se é um valor direto no recurso
-            if (root.has("valueQuantity") && root.path("code").path("coding").get(0).path("code").asText().equals(loincCode)) {
-                return root.path("valueQuantity").path("value").asDouble();
-            }
-
-            // Se não for, procura nos componentes
-            JsonNode component = root.path("component");
-            if (component.isArray()) {
-                for (JsonNode comp : component) {
-                    JsonNode code = comp.path("code");
-                    if (code.path("coding").isArray()) {
-                        for (JsonNode coding : code.path("coding")) {
-                            if (loincCode.equals(coding.path("code").asText())) {
-                                JsonNode valueQuantity = comp.path("valueQuantity");
-                                if (!valueQuantity.isMissingNode()) {
-                                    return valueQuantity.path("value").asDouble();
-                                }
-                            }
+            JsonNode codings = root.path("code").path("coding");
+            if (codings.isArray()) {
+                for (JsonNode coding : codings) {
+                    if (loincCode.equals(coding.path("code").asText())) {
+                        JsonNode valueQuantity = root.path("valueQuantity");
+                        if (!valueQuantity.isMissingNode()) {
+                            return valueQuantity.path("value").asDouble();
                         }
                     }
                 }
@@ -204,9 +189,6 @@ public class FhirParserService {
         }
     }
 
-    /**
-     * Analisa o hemograma e identifica desvios nos parâmetros
-     */
     public List<String> analyzeHemogram(HemogramData hemogram) {
         List<String> deviations = new ArrayList<>();
 
@@ -229,7 +211,6 @@ public class FhirParserService {
                 deviations.add(String.format("Plaquetas alteradas: %.0f /µL (normal: %.0f-%.0f)",
                         hemogram.getPlaquetas(), ReferenceValues.PLAQUETAS_MIN, ReferenceValues.PLAQUETAS_MAX));
 
-                // Verificar se as plaquetas estão baixas (indicativo de dengue)
                 if (ReferenceValues.isPlaquetasBaixas(hemogram.getPlaquetas())) {
                     deviations.add("⚠️ ALERTA DENGUE: Plaquetas baixas detectadas!");
                 }
