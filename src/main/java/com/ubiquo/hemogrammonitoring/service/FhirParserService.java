@@ -45,7 +45,7 @@ public class FhirParserService {
             logger.info("Processando hemograma para o paciente: {} (CPF: {}, Tel: {})", patientName, patientCpf, patientPhone);
 
             LocalDateTime timestamp = extractTimestamp(root);
-            String region = "Goiânia";
+            String region = extractRegionFromPatient(containedPatient);
 
             Double leucocitos = extractParameterValue(root, ReferenceValues.LEUCOCITOS_LOINC);
             Double hemoglobina = extractParameterValue(root, ReferenceValues.HEMOGLOBINA_LOINC);
@@ -225,5 +225,28 @@ public class FhirParserService {
         }
 
         return deviations;
+    }
+    
+    /**
+     * Extrai a região (cidade) do endereço do paciente
+     */
+    private String extractRegionFromPatient(JsonNode containedPatient) {
+        try {
+            if (containedPatient != null && containedPatient.has("address")) {
+                JsonNode address = containedPatient.path("address");
+                if (address.isArray() && address.size() > 0) {
+                    String city = address.get(0).path("city").asText(null);
+                    if (city != null && !city.isEmpty()) {
+                        logger.debug("Região extraída do paciente: {}", city);
+                        return city;
+                    }
+                }
+            }
+            logger.warn("Não foi possível extrair região do paciente, usando padrão: Goiânia");
+            return "Goiânia"; // Fallback padrão
+        } catch (Exception e) {
+            logger.warn("Erro ao extrair região do paciente: {}. Usando padrão: Goiânia", e.getMessage());
+            return "Goiânia";
+        }
     }
 }
