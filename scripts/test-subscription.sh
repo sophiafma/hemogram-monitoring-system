@@ -53,6 +53,12 @@ do
     PATIENT_CPF=$(shuf -i 10000000000-99999999999 -n 1)
     PATIENT_PHONE="629$(shuf -i 80000000-99999999 -n 1)"
     TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+    
+    # Gerar região aleatória (bairros/regiões de Goiânia)
+    # Baseado em regiões reais usadas pela vigilância epidemiológica
+    REGIOES=("Setor Bueno" "Setor Oeste" "Setor Sul" "Setor Marista" "Jardim Goiás" "Centro" "Setor Aeroporto" "Vila Nova" "Jardim América" "Parque Amazônia")
+    REGIAO_INDEX=$((RANDOM % ${#REGIOES[@]}))
+    REGIAO="${REGIOES[$REGIAO_INDEX]}"
 
     # Gerar valor de plaquetas aleatório com distribuição
     # 1/3 de chance de ser DENGUE, 1/3 NORMAL, 1/3 ALTO
@@ -72,6 +78,7 @@ do
     fi
 
     echo "   Paciente: ${PATIENT_NAME} (CPF: ${PATIENT_CPF})"
+    echo "   Região: ${REGIAO}"
     echo "   Plaquetas: ${PLAQUETAS} /µL (${STATUS})"
 
     # Construir o JSON FHIR com o recurso Patient contido
@@ -92,6 +99,11 @@ do
             "telecom": [{
                 "system": "phone",
                 "value": "${PATIENT_PHONE}"
+            }],
+            "address": [{
+                "city": "${REGIAO}",
+                "state": "GO",
+                "country": "BR"
             }]
         }
     ],
