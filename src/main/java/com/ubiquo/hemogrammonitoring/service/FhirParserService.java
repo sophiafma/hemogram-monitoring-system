@@ -1,71 +1,149 @@
 package com.ubiquo.hemogrammonitoring.service;
 
+import ca.uhn.fhir.context.FhirContext;
+import ca.uhn.fhir.parser.IParser;
 import com.ubiquo.hemogrammonitoring.entity.HemogramEntity;
 import com.ubiquo.hemogrammonitoring.model.HemogramData;
 import com.ubiquo.hemogrammonitoring.model.ReferenceValues;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ubiquo.hemogrammonitoring.repository.HemogramRepository;
+import org.hl7.fhir.r4.model.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
+import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 
+/**
+ * Service refatorado para usar HAPI FHIR corretamente.
+ * 
+ * Melhorias:
+ * - Usa classes HAPI (Bundle, Observation) em vez de parsing manual
+ * - Valida se JSON é FHIR válido antes de processar
+ * - Processa Bundle completo (formato real da SES-GO)
+ * - Código mais robusto e menos propenso a erros
+ */
 @Service
 public class FhirParserService {
 
     private static final Logger logger = LoggerFactory.getLogger(FhirParserService.class);
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    
+    private final FhirContext fhirContext;
+    private final IParser jsonParser;
     private final HemogramRepository hemogramRepository;
 
-    public FhirParserService(HemogramRepository hemogramRepository) {
+    public FhirParserService(FhirContext fhirContext, HemogramRepository hemogramRepository) {
+        this.fhirContext = fhirContext;
+        this.jsonParser = fhirContext.newJsonParser();
         this.hemogramRepository = hemogramRepository;
+        
+        // Configurar parser para ser mais tolerante (não falhar em extensions desconhecidas)
+        jsonParser.setParserErrorHandler(new ca.uhn.fhir.parser.LenientErrorHandler());
+        
+        logger.info("FhirParserService inicializado com HAPI FHIR R4");
     }
 
     /**
      * Processa um JSON FHIR, extrai dados do hemograma e o salva no banco de dados.
+     * 
+     * Suporta dois formatos:
+     * 1. Observation individual (código LOINC 777-3 para plaquetas)
+     * 2. Bundle contendo múltiplas Observations (formato SES-GO)
      */
     public HemogramData parseFhirObservation(String fhirJson) {
         try {
-            JsonNode root = objectMapper.readTree(fhirJson);
-
-            String observationId = root.path("id").asText("N/A");
-
-            // Extrair dados do paciente contido no JSON
-            JsonNode containedPatient = findContainedPatient(root);
-            String patientId = extractPatientId(root);
-            String patientName = extractContainedPatientName(containedPatient);
-            String patientCpf = extractContainedPatientCpf(containedPatient);
-            String patientPhone = extractContainedPatientPhone(containedPatient);
-
-            logger.info("Processando hemograma para o paciente: {} (CPF: {}, Tel: {})", patientName, patientCpf, patientPhone);
-
-            LocalDateTime timestamp = extractTimestamp(root);
-            String region = extractRegionFromPatient(containedPatient);
-
-            Double leucocitos = extractParameterValue(root, ReferenceValues.LEUCOCITOS_LOINC);
-            Double hemoglobina = extractParameterValue(root, ReferenceValues.HEMOGLOBINA_LOINC);
-            Double plaquetas = extractParameterValue(root, ReferenceValues.PLAQUETAS_LOINC);
-            Double hematocrito = extractParameterValue(root, ReferenceValues.HEMATOCRITO_LOINC);
-
+            logger.debug("Iniciando parse de JSON FHIR");
+            
+            // Primeiro, tenta identificar o tipo de recurso
+            Resource resource = jsonParser.parseResource(fhirJson);
+            
+            if (resource instanceof Bundle) {
+                logger.info("Recurso identificado como Bundle - processando...");
+                return processBundle((Bundle) resource);
+            } else if (resource instanceof Observation) {
+                logger.info("Recurso identificado como Observation individual - processando...");
+                return processObservation((Observation) resource);
+            } else {
+                logger.error("Tipo de recurso FHIR não suportado: {}", resource.getResourceType());
+                return null;
+            }
+            
+        } catch (Exception e) {
+            logger.error("Erro ao processar JSON FHIR: {}", e.getMessage(), e);
+            return null;
+        }
+    }
+    
+    /**
+     * Processa um Bundle FHIR (formato usado pela SES-GO).
+     * Busca Observations com código LOINC 777-3 (plaquetas).
+     */
+    private HemogramData processBundle(Bundle bundle) {
+        logger.info("Processando Bundle com {} entradas", bundle.getEntry().size());
+        
+        // Procurar Observation de plaquetas no Bundle
+        for (Bundle.BundleEntryComponent entry : bundle.getEntry()) {
+            if (entry.getResource() instanceof Observation) {
+                Observation obs = (Observation) entry.getResource();
+                
+                // Verificar se é plaquetas (LOINC 777-3)
+                if (hasLoincCode(obs, ReferenceValues.PLAQUETAS_LOINC)) {
+                    logger.info("Observation de plaquetas encontrada no Bundle");
+                    return processObservation(obs);
+                }
+            }
+        }
+        
+        logger.warn("Nenhuma Observation de plaquetas (LOINC 777-3) encontrada no Bundle");
+        return null;
+    }
+    
+    /**
+     * Processa uma Observation FHIR individual e extrai dados do hemograma.
+     */
+    private HemogramData processObservation(Observation observation) {
+        try {
+            String observationId = observation.hasId() ? observation.getId() : "N/A";
+            
+            // Extrair referência do paciente
+            String patientId = extractPatientIdFromObservation(observation);
+            
+            // Extrair timestamp
+            LocalDateTime timestamp = extractTimestampFromObservation(observation);
+            
+            // Extrair região (por enquanto, fallback para Goiânia - tarefa #15 vai melhorar isso)
+            String region = extractRegionFromObservation(observation);
+            
+            // Extrair valor das plaquetas
+            Double plaquetas = extractQuantityValue(observation);
+            
+            // Dados do paciente (por enquanto valores padrão, JSON SES-GO não tem Patient completo)
+            String patientName = "Paciente " + patientId;
+            String patientCpf = extractCpfFromSubject(observation);
+            String patientPhone = "Não disponível";
+            
+            // Por enquanto, só temos plaquetas (outros parâmetros viriam de um Bundle completo)
+            Double leucocitos = null;
+            Double hemoglobina = null;
+            Double hematocrito = null;
+            
+            logger.info("Hemograma extraído: Paciente={}, Plaquetas={}", patientCpf, plaquetas);
+            
             HemogramData hemogramData = new HemogramData(
                     observationId, patientId, patientName, patientCpf, patientPhone,
                     timestamp, leucocitos, hemoglobina, plaquetas, hematocrito, region
             );
-
-            logger.info("Dados do hemograma extraídos: {}", hemogramData);
-
+            
             // Salvar no banco de dados
             saveHemogram(hemogramData);
-
+            
             return hemogramData;
-
+            
         } catch (Exception e) {
-            logger.error("Erro ao processar JSON FHIR: {}", e.getMessage(), e);
+            logger.error("Erro ao processar Observation: {}", e.getMessage(), e);
             return null;
         }
     }
@@ -99,94 +177,104 @@ public class FhirParserService {
         }
     }
 
-    private JsonNode findContainedPatient(JsonNode root) {
-        JsonNode contained = root.path("contained");
-        if (contained.isArray()) {
-            for (JsonNode resource : contained) {
-                if ("Patient".equals(resource.path("resourceType").asText())) {
-                    return resource;
-                }
+    /**
+     * Verifica se uma Observation tem um código LOINC específico.
+     */
+    private boolean hasLoincCode(Observation observation, String loincCode) {
+        if (!observation.hasCode() || !observation.getCode().hasCoding()) {
+            return false;
+        }
+        
+        for (Coding coding : observation.getCode().getCoding()) {
+            if ("http://loinc.org".equals(coding.getSystem()) && 
+                loincCode.equals(coding.getCode())) {
+                return true;
             }
         }
-        return null;
+        return false;
     }
-
-    private String extractContainedPatientName(JsonNode patientNode) {
-        if (patientNode == null) return "Nome não encontrado";
-        return patientNode.path("name").get(0).path("text").asText("Nome não encontrado");
-    }
-
-    private String extractContainedPatientCpf(JsonNode patientNode) {
-        if (patientNode == null) return "CPF não encontrado";
-        JsonNode identifier = patientNode.path("identifier");
-        if (identifier.isArray()) {
-            for (JsonNode id : identifier) {
-                if ("urn:oid:2.16.840.1.113883.4.642.3.1".equals(id.path("system").asText())) {
-                    return id.path("value").asText("CPF não encontrado");
-                }
-            }
-        }
-        return "CPF não encontrado";
-    }
-
-    private String extractContainedPatientPhone(JsonNode patientNode) {
-        if (patientNode == null) return "Telefone não encontrado";
-        JsonNode telecom = patientNode.path("telecom");
-        if (telecom.isArray()) {
-            for (JsonNode contact : telecom) {
-                if ("phone".equals(contact.path("system").asText())) {
-                    return contact.path("value").asText("Telefone não encontrado");
-                }
-            }
-        }
-        return "Telefone não encontrado";
-    }
-
-    private String extractPatientId(JsonNode root) {
-        try {
-            String reference = root.path("subject").path("reference").asText();
+    
+    /**
+     * Extrai ID do paciente da Observation usando API HAPI.
+     */
+    private String extractPatientIdFromObservation(Observation observation) {
+        if (observation.hasSubject() && observation.getSubject().hasReference()) {
+            String reference = observation.getSubject().getReference();
             if (reference.startsWith("#")) {
                 return reference.substring(1);
             }
             return reference.replace("Patient/", "");
-        } catch (Exception e) {
-            logger.warn("Não foi possível extrair ID do paciente: {}", e.getMessage());
-            return "unknown";
         }
+        return "unknown";
     }
-
-    private LocalDateTime extractTimestamp(JsonNode root) {
+    
+    /**
+     * Extrai timestamp da Observation usando API HAPI.
+     */
+    private LocalDateTime extractTimestampFromObservation(Observation observation) {
         try {
-            String dateString = root.path("effectiveDateTime").asText();
-            if (dateString.isEmpty()) {
-                dateString = root.path("issued").asText();
+            Date date = null;
+            
+            if (observation.hasEffectiveDateTimeType()) {
+                date = observation.getEffectiveDateTimeType().getValue();
+            } else if (observation.hasIssued()) {
+                date = observation.getIssued();
             }
-            return LocalDateTime.parse(dateString, DateTimeFormatter.ISO_DATE_TIME);
+            
+            if (date != null) {
+                return date.toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime();
+            }
+            
+            logger.warn("Timestamp não encontrado na Observation, usando data atual");
+            return LocalDateTime.now();
+            
         } catch (Exception e) {
-            logger.warn("Não foi possível extrair timestamp, usando data atual: {}", e.getMessage());
+            logger.warn("Erro ao extrair timestamp: {}. Usando data atual", e.getMessage());
             return LocalDateTime.now();
         }
     }
-
-    private Double extractParameterValue(JsonNode root, String loincCode) {
+    
+    /**
+     * Extrai valor numérico (plaquetas) da Observation usando API HAPI.
+     */
+    private Double extractQuantityValue(Observation observation) {
         try {
-            JsonNode codings = root.path("code").path("coding");
-            if (codings.isArray()) {
-                for (JsonNode coding : codings) {
-                    if (loincCode.equals(coding.path("code").asText())) {
-                        JsonNode valueQuantity = root.path("valueQuantity");
-                        if (!valueQuantity.isMissingNode()) {
-                            return valueQuantity.path("value").asDouble();
-                        }
-                    }
+            if (observation.hasValueQuantity()) {
+                Quantity quantity = observation.getValueQuantity();
+                if (quantity.hasValue()) {
+                    return quantity.getValue().doubleValue();
                 }
             }
-            logger.warn("Parâmetro com código LOINC {} não encontrado", loincCode);
+            logger.warn("Valor numérico não encontrado na Observation");
             return null;
         } catch (Exception e) {
-            logger.warn("Erro ao extrair parâmetro com código LOINC {}: {}", loincCode, e.getMessage());
+            logger.warn("Erro ao extrair valor: {}", e.getMessage());
             return null;
         }
+    }
+    
+    /**
+     * Extrai CPF do subject.identifier usando API HAPI.
+     */
+    private String extractCpfFromSubject(Observation observation) {
+        if (observation.hasSubject() && observation.getSubject().hasIdentifier()) {
+            Identifier identifier = observation.getSubject().getIdentifier();
+            if ("https://fhir.saude.go.gov.br/sid/cpf".equals(identifier.getSystem())) {
+                return identifier.getValue();
+            }
+        }
+        return "CPF não disponível";
+    }
+    
+    /**
+     * Extrai região da Observation.
+     * TODO: Tarefa #15 vai implementar estratégia configurável (CNES, endereço, etc)
+     */
+    private String extractRegionFromObservation(Observation observation) {
+        // Por enquanto, fallback para Goiânia
+        // Tarefa #15 vai criar interface RegionResolver para extrair por CNES do performer
+        logger.debug("Região não implementada ainda (aguardando tarefa #15), usando fallback");
+        return "Goiânia";
     }
 
     public List<String> analyzeHemogram(HemogramData hemogram) {
@@ -225,28 +313,5 @@ public class FhirParserService {
         }
 
         return deviations;
-    }
-    
-    /**
-     * Extrai a região (cidade) do endereço do paciente
-     */
-    private String extractRegionFromPatient(JsonNode containedPatient) {
-        try {
-            if (containedPatient != null && containedPatient.has("address")) {
-                JsonNode address = containedPatient.path("address");
-                if (address.isArray() && address.size() > 0) {
-                    String city = address.get(0).path("city").asText(null);
-                    if (city != null && !city.isEmpty()) {
-                        logger.debug("Região extraída do paciente: {}", city);
-                        return city;
-                    }
-                }
-            }
-            logger.warn("Não foi possível extrair região do paciente, usando padrão: Goiânia");
-            return "Goiânia"; // Fallback padrão
-        } catch (Exception e) {
-            logger.warn("Erro ao extrair região do paciente: {}. Usando padrão: Goiânia", e.getMessage());
-            return "Goiânia";
-        }
     }
 }
