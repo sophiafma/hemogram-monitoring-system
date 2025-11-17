@@ -113,6 +113,28 @@ curl http://localhost:8081/admin/subscription/status
 
 ---
 
+## Scripts de Teste com Bundles FHIR
+
+Para demonstrações mais realistas, há scripts que geram Bundles completos (formato SES-GO) e os enviam para a aplicação.
+
+### Gerar os JSONs
+```bash
+python test-data/scripts/generate_hemogram_bundles.py
+```
+- Gera 20 arquivos em `test-data/json-examples/` (leucócitos absolutos, plaquetas, hemoglobina, hematócrito e bairros de Goiânia).
+- Os arquivos são **ignorados pelo Git** (`test-data/json-examples/*.json` no `.gitignore`), evitando versões antigas no repositório.
+
+### Enviar automaticamente para a API
+```bash
+bash test-data/scripts/send_hemogram_bundles.sh
+```
+- Requer a aplicação rodando em `http://localhost:8081`.
+- Faz POST em `/fhir/direct-test` para cada arquivo gerado e mostra um resumo de sucessos/falhas.
+
+Use esses scripts para popular rapidamente o banco antes de acessar os dashboards analíticos.
+
+---
+
 ## Configuração do Servidor FHIR
 
 A aplicação precisa se conectar a um **Servidor FHIR**. Configure em `src/main/resources/application.yml`:

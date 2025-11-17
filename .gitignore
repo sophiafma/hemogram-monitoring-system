@@ -29,3 +29,6 @@ Thumbs.db
 *.swp
 *~
 
+# Dados gerados para testes
+test-data/json-examples/*.json
+

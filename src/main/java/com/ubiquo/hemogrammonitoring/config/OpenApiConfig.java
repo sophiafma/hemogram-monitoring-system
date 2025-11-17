@@ -2,8 +2,6 @@ package com.ubiquo.hemogrammonitoring.config;
 
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Info;
-import io.swagger.v3.oas.models.info.Contact;
-import io.swagger.v3.oas.models.info.License;
 import io.swagger.v3.oas.models.servers.Server;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -18,18 +16,12 @@ public class OpenApiConfig {
         return new OpenAPI()
                 .info(new Info()
                         .title("Sistema de Monitoramento de Hemogramas")
-                        .version("1.0.0 - Marco 1")
+                        .version("1.0.0")
                         .description("""
                                 ## 🏥 Sistema de Monitoramento de Hemogramas
                                 
-                                Sistema desenvolvido para a disciplina de **Software para Sistemas Ubíquos** que monitora 
-                                hemogramas em tempo real para detectar possíveis surtos de dengue baseados em plaquetas baixas.
-                                
-                                ### 📊 Funcionalidades (Marco 1)
-                                - ✅ Recepção de dados FHIR via subscription
-                                - ✅ Processamento de hemogramas usando códigos LOINC
-                                - ✅ Detecção automática de alertas de dengue
-                                - ✅ Análise de desvios nos parâmetros hematológicos
+                                Plataforma para monitorar hemogramas em tempo real, detectar desvios nos
+                                parâmetros hematológicos e emitir alertas para possíveis casos de dengue.
                                 
                                 ### 🔬 Parâmetros Monitorados
                                 | Parâmetro | Código LOINC | Valor Normal |
@@ -40,15 +32,8 @@ public class OpenApiConfig {
                                 | Hematócrito | 4544-3 | 36-52% |
                                 
                                 ### 🚨 Detecção de Dengue
-                                O sistema emite alerta automático quando detecta plaquetas abaixo de 150.000 /µL,
-                                que é um dos principais indicadores de dengue.
-                                """)
-                        .contact(new Contact()
-                                .name("Equipe de Desenvolvimento")
-                                .email("contato@hemogram-monitoring.com"))
-                        .license(new License()
-                                .name("MIT License")
-                                .url("https://opensource.org/licenses/MIT")))
+                                O sistema emite alerta automático quando detecta plaquetas abaixo de 150.000 /µL.
+                                """))
                 .servers(List.of(
                         new Server()
                                 .url("http://localhost:8081")
