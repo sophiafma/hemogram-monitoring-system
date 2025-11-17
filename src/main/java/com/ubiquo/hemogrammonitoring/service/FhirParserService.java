@@ -58,7 +58,8 @@ public class FhirParserService {
             logger.debug("Iniciando parse de JSON FHIR");
             
             // Primeiro, tenta identificar o tipo de recurso
-            Resource resource = jsonParser.parseResource(fhirJson);
+            // parseResource retorna IBaseResource, então fazemos cast para Resource (R4)
+            Resource resource = (Resource) jsonParser.parseResource(fhirJson);
             
             if (resource instanceof Bundle) {
                 logger.info("Recurso identificado como Bundle - processando...");
@@ -79,26 +80,84 @@ public class FhirParserService {
     
     /**
      * Processa um Bundle FHIR (formato usado pela SES-GO).
-     * Busca Observations com código LOINC 777-3 (plaquetas).
+     * Extrai TODOS os parâmetros do hemograma (leucócitos, hemoglobina, plaquetas, hematócrito).
      */
     private HemogramData processBundle(Bundle bundle) {
         logger.info("Processando Bundle com {} entradas", bundle.getEntry().size());
         
-        // Procurar Observation de plaquetas no Bundle
+        // Variáveis para armazenar os valores extraídos
+        Double leucocitos = null;
+        Double hemoglobina = null;
+        Double plaquetas = null;
+        Double hematocrito = null;
+        
+        // Dados comuns (serão extraídos da primeira Observation válida)
+        String observationId = null;
+        String patientId = null;
+        String patientCpf = null;
+        LocalDateTime timestamp = null;
+        String region = null;
+        Observation firstObservation = null;
+        
+        // Processar todas as Observations do Bundle
         for (Bundle.BundleEntryComponent entry : bundle.getEntry()) {
             if (entry.getResource() instanceof Observation) {
                 Observation obs = (Observation) entry.getResource();
                 
-                // Verificar se é plaquetas (LOINC 777-3)
-                if (hasLoincCode(obs, ReferenceValues.PLAQUETAS_LOINC)) {
-                    logger.info("Observation de plaquetas encontrada no Bundle");
-                    return processObservation(obs);
+                // Extrair dados comuns da primeira Observation válida
+                if (firstObservation == null) {
+                    firstObservation = obs;
+                    observationId = obs.hasId() ? obs.getId() : "N/A";
+                    patientId = extractPatientIdFromObservation(obs);
+                    patientCpf = extractCpfFromSubject(obs);
+                    timestamp = extractTimestampFromObservation(obs);
+                    region = extractRegionFromObservation(obs);
+                }
+                
+                // Extrair valores baseado no código LOINC
+                if (hasLoincCode(obs, ReferenceValues.LEUCOCITOS_LOINC)) {
+                    leucocitos = extractQuantityValue(obs);
+                    logger.debug("Leucócitos encontrados: {}", leucocitos);
+                } else if (hasLoincCode(obs, ReferenceValues.HEMOGLOBINA_LOINC)) {
+                    hemoglobina = extractQuantityValue(obs);
+                    logger.debug("Hemoglobina encontrada: {}", hemoglobina);
+                } else if (hasLoincCode(obs, ReferenceValues.PLAQUETAS_LOINC)) {
+                    plaquetas = extractQuantityValue(obs);
+                    logger.debug("Plaquetas encontradas: {}", plaquetas);
+                } else if (hasLoincCode(obs, ReferenceValues.HEMATOCRITO_LOINC)) {
+                    hematocrito = extractQuantityValue(obs);
+                    logger.debug("Hematócrito encontrado: {}", hematocrito);
                 }
             }
         }
         
-        logger.warn("Nenhuma Observation de plaquetas (LOINC 777-3) encontrada no Bundle");
-        return null;
+        // Verificar se encontrou pelo menos um parâmetro
+        if (leucocitos == null && hemoglobina == null && plaquetas == null && hematocrito == null) {
+            logger.warn("Nenhum parâmetro de hemograma encontrado no Bundle");
+            return null;
+        }
+        
+        if (firstObservation == null) {
+            logger.warn("Nenhuma Observation válida encontrada no Bundle");
+            return null;
+        }
+        
+        logger.info("Bundle processado: Leucócitos={}, Hemoglobina={}, Plaquetas={}, Hematócrito={}", 
+                    leucocitos, hemoglobina, plaquetas, hematocrito);
+        
+        // Criar HemogramData com todos os valores extraídos
+        String patientName = "Paciente " + patientId;
+        String patientPhone = "Não disponível";
+        
+        HemogramData hemogramData = new HemogramData(
+                observationId, patientId, patientName, patientCpf, patientPhone,
+                timestamp, leucocitos, hemoglobina, plaquetas, hematocrito, region
+        );
+        
+        // Salvar no banco de dados
+        saveHemogram(hemogramData);
+        
+        return hemogramData;
     }
     
     /**
@@ -267,13 +326,35 @@ public class FhirParserService {
     }
     
     /**
-     * Extrai região da Observation.
-     * TODO: Tarefa #15 vai implementar estratégia configurável (CNES, endereço, etc)
+     * Extrai região/bairro da Observation.
+     * 
+     * Estratégias de extração (em ordem de prioridade):
+     * 1. Extension com bairro/região (quando disponível no JSON gerado)
+     * 2. CNES do performer (pode ser usado para mapear região)
+     * 3. Endereço do paciente (se disponível)
+     * 4. Fallback para "Goiânia"
      */
     private String extractRegionFromObservation(Observation observation) {
-        // Por enquanto, fallback para Goiânia
-        // Tarefa #15 vai criar interface RegionResolver para extrair por CNES do performer
-        logger.debug("Região não implementada ainda (aguardando tarefa #15), usando fallback");
+        // TODO: Quando o script de geração incluir bairro, extrair de:
+        // - Extension na Observation
+        // - Extension no Patient (se disponível)
+        // - Address do Patient (se disponível)
+        
+        // Por enquanto, tenta extrair CNES do performer para log
+        if (observation.hasPerformer() && !observation.getPerformer().isEmpty()) {
+            Reference performerRef = observation.getPerformerFirstRep();
+            if (performerRef.hasIdentifier()) {
+                Identifier identifier = performerRef.getIdentifier();
+                if ("https://fhir.saude.go.gov.br/sid/cnes".equals(identifier.getSystem())) {
+                    String cnes = identifier.getValue();
+                    logger.debug("CNES encontrado: {} (pode ser usado para mapear região no futuro)", cnes);
+                }
+            }
+        }
+        
+        // Fallback: retorna "Goiânia" por enquanto
+        // Quando o script de geração incluir bairro, este método será atualizado para extrair
+        logger.debug("Bairro/região não encontrado no JSON, usando fallback 'Goiânia'");
         return "Goiânia";
     }
 
