@@ -16,7 +16,7 @@ public class ReferenceValues {
     public static final double HEMATOCRITO_MAX = 52.0; // %
     
     // Códigos LOINC para identificação dos parâmetros
-    public static final String LEUCOCITOS_LOINC = "33747-0"; // Leukocytes [#/volume] in Blood
+    public static final String LEUCOCITOS_LOINC = "33747-0"; // Leukocytes [#/volume] in Blood (quantidade absoluta em /µL)
     public static final String HEMOGLOBINA_LOINC = "718-7"; // Hemoglobin [Mass/volume] in Blood
     public static final String PLAQUETAS_LOINC = "777-3"; // Platelets [#/volume] in Blood
     public static final String HEMATOCRITO_LOINC = "4544-3"; // Hematocrit [Volume Fraction] of Blood
