@@ -14,20 +14,26 @@ public class IndicadoresRegionaisDTO {
     private long totalAlertas;
     private double proporcaoAlertas; // 0 a 1 (ex: 0.40 = 40%)
     private Double mediaPlaquetas;
+    private Double mediaLeucocitos;
     private boolean temRiscoColetivo; // true se proporção > 40%
     private String mensagem;
-    
+    private String tendenciaPlaquetas; // "SUBINDO", "CAINDO", "ESTAVEL"
+    private Double variacaoPlaquetasPorcentagem;
+    private String tendenciaLeucocitos; // "SUBINDO", "CAINDO", "ESTAVEL"
+    private Double variacaoLeucocitosPorcentagem;
+
     public IndicadoresRegionaisDTO() {
     }
     
     public IndicadoresRegionaisDTO(String regiao, LocalDateTime dataInicio, LocalDateTime dataFim, 
-                                   long totalHemogramas, long totalAlertas, Double mediaPlaquetas) {
+                                   long totalHemogramas, long totalAlertas, Double mediaPlaquetas, Double mediaLeucocitos) {
         this.regiao = regiao;
         this.dataInicio = dataInicio;
         this.dataFim = dataFim;
         this.totalHemogramas = totalHemogramas;
         this.totalAlertas = totalAlertas;
         this.mediaPlaquetas = mediaPlaquetas;
+        this.mediaLeucocitos = mediaLeucocitos;
         
         // Calcular proporção
         if (totalHemogramas > 0) {
@@ -109,6 +115,14 @@ public class IndicadoresRegionaisDTO {
         this.mediaPlaquetas = mediaPlaquetas;
     }
 
+    public Double getMediaLeucocitos() {
+        return mediaLeucocitos;
+    }
+
+    public void setMediaLeucocitos(Double mediaLeucocitos) {
+        this.mediaLeucocitos = mediaLeucocitos;
+    }
+
     public boolean isTemRiscoColetivo() {
         return temRiscoColetivo;
     }
@@ -123,6 +137,37 @@ public class IndicadoresRegionaisDTO {
 
     public void setMensagem(String mensagem) {
         this.mensagem = mensagem;
+    }
+    public String getTendenciaPlaquetas() {
+        return tendenciaPlaquetas;
+    }
+
+    public void setTendenciaPlaquetas(String tendenciaPlaquetas) {
+        this.tendenciaPlaquetas = tendenciaPlaquetas;
+    }
+
+    public Double getVariacaoPlaquetasPorcentagem() {
+        return variacaoPlaquetasPorcentagem;
+    }
+
+    public void setVariacaoPlaquetasPorcentagem(Double variacaoPlaquetasPorcentagem) {
+        this.variacaoPlaquetasPorcentagem = variacaoPlaquetasPorcentagem;
+    }
+
+    public String getTendenciaLeucocitos() {
+        return tendenciaLeucocitos;
+    }
+
+    public void setTendenciaLeucocitos(String tendenciaLeucocitos) {
+        this.tendenciaLeucocitos = tendenciaLeucocitos;
+    }
+
+    public Double getVariacaoLeucocitosPorcentagem() {
+        return variacaoLeucocitosPorcentagem;
+    }
+
+    public void setVariacaoLeucocitosPorcentagem(Double variacaoLeucocitosPorcentagem) {
+        this.variacaoLeucocitosPorcentagem = variacaoLeucocitosPorcentagem;
     }
 }
 

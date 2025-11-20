@@ -90,4 +90,15 @@ public interface HemogramRepository extends JpaRepository<HemogramEntity, Long> 
             @Param("startTime") LocalDateTime startTime,
             @Param("endTime") LocalDateTime endTime
     );
+    /**
+     * Calcula a média de leucócitos de uma região em um período
+     */
+    @Query("SELECT AVG(h.leucocitos) FROM HemogramEntity h WHERE h.region = :region " +
+            "AND h.timestamp BETWEEN :startTime AND :endTime " +
+            "AND h.leucocitos IS NOT NULL")
+    Double calculateAverageLeucocitosInRegion(
+            @Param("region") String region,
+            @Param("startTime") LocalDateTime startTime,
+            @Param("endTime") LocalDateTime endTime
+    );
 }
