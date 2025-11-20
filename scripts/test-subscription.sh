@@ -55,68 +55,72 @@ do
     TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
     
     # Gerar região aleatória (bairros/regiões de Goiânia)
-    # Baseado em regiões reais usadas pela vigilância epidemiológica
     REGIOES=("Setor Bueno" "Setor Oeste" "Setor Sul" "Setor Marista" "Jardim Goiás" "Centro" "Setor Aeroporto" "Vila Nova" "Jardim América" "Parque Amazônia")
     REGIAO_INDEX=$((RANDOM % ${#REGIOES[@]}))
     REGIAO="${REGIOES[$REGIAO_INDEX]}"
 
-    # Gerar valor de plaquetas aleatório com distribuição
+    # Gerar valor de plaquetas E LEUCÓCITOS aleatório
     # 1/3 de chance de ser DENGUE, 1/3 NORMAL, 1/3 ALTO
     RAND_CASE=$((RANDOM % 3))
     if [ $RAND_CASE -eq 0 ]; then
-        # CASO DENGUE
+        # CASO DENGUE (Ambos baixos)
         PLAQUETAS=$(shuf -i 20000-149000 -n 1)
+        LEUCOCITOS=$(shuf -i 1500-3900 -n 1)
         STATUS="⚠️ DENGUE"
     elif [ $RAND_CASE -eq 1 ]; then
         # CASO NORMAL
         PLAQUETAS=$(shuf -i 150000-450000 -n 1)
+        LEUCOCITOS=$(shuf -i 4500-10500 -n 1)
         STATUS="✅ NORMAL"
     else
         # CASO ALTO (apenas para variar os dados)
         PLAQUETAS=$(shuf -i 451000-600000 -n 1)
+        LEUCOCITOS=$(shuf -i 12000-18000 -n 1)
         STATUS="⬆️ ALTO"
     fi
 
     echo "   Paciente: ${PATIENT_NAME} (CPF: ${PATIENT_CPF})"
     echo "   Região: ${REGIAO}"
-    echo "   Plaquetas: ${PLAQUETAS} /µL (${STATUS})"
+    echo "   Plaquetas: ${PLAQUETAS} /µL | Leucócitos: ${LEUCOCITOS} /µL (${STATUS})"
 
-    # Construir o JSON FHIR com o recurso Patient contido
+    # Construir o JSON FHIR do tipo Bundle (Pacote)
+    # Motivo: Precisamos enviar DUAS Observations (Plaquetas + Leucócitos) juntas.
     JSON_PAYLOAD=$(cat <<EOF
 {
-    "resourceType": "Observation",
-    "id": "hemograma-sim-${i}",
-    "status": "final",
-    "contained": [
-        {
-            "resourceType": "Patient",
-            "id": "${PATIENT_ID}",
-            "name": [{"text": "${PATIENT_NAME}"}],
-            "identifier": [{
-                "system": "urn:oid:2.16.840.1.113883.4.642.3.1",
-                "value": "${PATIENT_CPF}"
-            }],
-            "telecom": [{
-                "system": "phone",
-                "value": "${PATIENT_PHONE}"
-            }],
-            "address": [{
-                "city": "${REGIAO}",
-                "state": "GO",
-                "country": "BR"
-            }]
-        }
-    ],
-    "code": {
-        "coding": [{
-            "system": "http://loinc.org",
-            "code": "777-3",
-            "display": "Platelets"
-        }]
+  "resourceType": "Bundle",
+  "type": "collection",
+  "entry": [
+    {
+      "resource": {
+        "resourceType": "Patient",
+        "id": "${PATIENT_ID}",
+        "name": [{"text": "${PATIENT_NAME}"}],
+        "identifier": [{ "system": "https://fhir.saude.go.gov.br/sid/cpf", "value": "${PATIENT_CPF}" }],
+        "telecom": [{ "system": "phone", "value": "${PATIENT_PHONE}" }],
+        "address": [{ "city": "${REGIAO}", "state": "GO", "country": "BR" }]
+      }
     },
-    "subject": {"reference": "#${PATIENT_ID}"},
-    "effectiveDateTime": "${TIMESTAMP}",
-    "valueQuantity": {"value": ${PLAQUETAS}, "unit": "/µL"}
+    {
+      "resource": {
+        "resourceType": "Observation",
+        "status": "final",
+        "code": { "coding": [{ "system": "http://loinc.org", "code": "777-3", "display": "Platelets" }] },
+        "subject": { "reference": "Patient/${PATIENT_ID}" },
+        "effectiveDateTime": "${TIMESTAMP}",
+        "valueQuantity": { "value": ${PLAQUETAS}, "unit": "/µL" }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Observation",
+        "status": "final",
+        "code": { "coding": [{ "system": "http://loinc.org", "code": "33747-0", "display": "Leukocytes" }] },
+        "subject": { "reference": "Patient/${PATIENT_ID}" },
+        "effectiveDateTime": "${TIMESTAMP}",
+        "valueQuantity": { "value": ${LEUCOCITOS}, "unit": "/µL" }
+      }
+    }
+  ]
 }
 EOF
 )
@@ -142,4 +146,3 @@ echo "   3. O servidor FHIR não foi utilizado neste teste."
 echo ""
 echo "🔍 Para ver os resultados, verifique os logs da sua aplicação Spring Boot."
 echo ""
-

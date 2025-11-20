@@ -59,4 +59,10 @@ public class ReferenceValues {
     public static boolean isPlaquetasBaixas(double value) {
         return value < PLAQUETAS_MIN;
     }
+    /**
+     * Verifica se os leucócitos estão baixos (indicativo de dengue quando combinado com plaquetas)
+     */
+    public static boolean isLeucocitosBaixos(double value) {
+        return value < LEUCOCITOS_MIN;
+    }
 }

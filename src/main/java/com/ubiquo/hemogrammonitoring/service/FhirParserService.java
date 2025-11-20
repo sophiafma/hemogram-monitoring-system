@@ -107,7 +107,7 @@ public class FhirParserService {
                 // Extrair dados comuns da primeira Observation válida
                 if (firstObservation == null) {
                     firstObservation = obs;
-                    observationId = obs.hasId() ? obs.getId() : "N/A";
+                    observationId = obs.hasId() ? obs.getId() : java.util.UUID.randomUUID().toString();
                     patientId = extractPatientIdFromObservation(obs);
                     patientCpf = extractCpfFromSubject(obs);
                     timestamp = extractTimestampFromObservation(obs);
@@ -165,8 +165,8 @@ public class FhirParserService {
      */
     private HemogramData processObservation(Observation observation) {
         try {
-            String observationId = observation.hasId() ? observation.getId() : "N/A";
-            
+            String observationId = observation.hasId() ? observation.getId() : java.util.UUID.randomUUID().toString();
+
             // Extrair referência do paciente
             String patientId = extractPatientIdFromObservation(observation);
             
@@ -361,6 +361,7 @@ public class FhirParserService {
     public List<String> analyzeHemogram(HemogramData hemogram) {
         List<String> deviations = new ArrayList<>();
 
+        // Análise de Leucócitos
         if (hemogram.getLeucocitos() != null) {
             if (!ReferenceValues.isLeucocitosNormal(hemogram.getLeucocitos())) {
                 deviations.add(String.format("Leucócitos alterados: %.2f /µL (normal: %.0f-%.0f)",
@@ -368,6 +369,7 @@ public class FhirParserService {
             }
         }
 
+        // Análise de Hemoglobina
         if (hemogram.getHemoglobina() != null) {
             if (!ReferenceValues.isHemoglobinaNormal(hemogram.getHemoglobina())) {
                 deviations.add(String.format("Hemoglobina alterada: %.2f g/dL (normal: %.1f-%.1f)",
@@ -375,22 +377,30 @@ public class FhirParserService {
             }
         }
 
+        // Análise de Plaquetas
         if (hemogram.getPlaquetas() != null) {
             if (!ReferenceValues.isPlaquetasNormal(hemogram.getPlaquetas())) {
                 deviations.add(String.format("Plaquetas alteradas: %.0f /µL (normal: %.0f-%.0f)",
                         hemogram.getPlaquetas(), ReferenceValues.PLAQUETAS_MIN, ReferenceValues.PLAQUETAS_MAX));
 
-                if (ReferenceValues.isPlaquetasBaixas(hemogram.getPlaquetas())) {
-                    deviations.add("⚠️ ALERTA DENGUE: Plaquetas baixas detectadas!");
-                }
             }
         }
 
+        // Análise de Hematócrito
         if (hemogram.getHematocrito() != null) {
             if (!ReferenceValues.isHematocritoNormal(hemogram.getHematocrito())) {
                 deviations.add(String.format("Hematócrito alterado: %.2f%% (normal: %.0f-%.0f%%)",
                         hemogram.getHematocrito(), ReferenceValues.HEMATOCRITO_MIN, ReferenceValues.HEMATOCRITO_MAX));
             }
+        }
+
+        // LÓGICA COMBINADA DE ALERTA DE DENGUE (PLAQUETAS + LEUCÓCITOS)
+        boolean temPlaquetasBaixas = hemogram.getPlaquetas() != null && ReferenceValues.isPlaquetasBaixas(hemogram.getPlaquetas());
+        boolean temLeucocitosBaixos = hemogram.getLeucocitos() != null && ReferenceValues.isLeucocitosBaixos(hemogram.getLeucocitos());
+
+        // Só emite alerta de DENGUE se ambos estiverem baixos
+        if (temPlaquetasBaixas && temLeucocitosBaixos) {
+            deviations.add("⚠️ ALERTA DENGUE: Plaquetas E Leucócitos baixos detectados simultaneamente!");
         }
 
         return deviations;
