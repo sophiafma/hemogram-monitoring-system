@@ -335,12 +335,14 @@ public class FhirParserService {
      * 4. Fallback para "Goiânia"
      */
     private String extractRegionFromObservation(Observation observation) {
-        // TODO: Quando o script de geração incluir bairro, extrair de:
-        // - Extension na Observation
-        // - Extension no Patient (se disponível)
-        // - Address do Patient (se disponível)
+        // 1. Tentar extrair bairro da extension
+        String bairro = extractBairroFromExtension(observation);
+        if (bairro != null && !bairro.isEmpty()) {
+            logger.debug("Bairro extraído da extension: {}", bairro);
+            return bairro;
+        }
         
-        // Por enquanto, tenta extrair CNES do performer para log
+        // 2. Por enquanto, tenta extrair CNES do performer para log (futuro: mapear CNES → região)
         if (observation.hasPerformer() && !observation.getPerformer().isEmpty()) {
             Reference performerRef = observation.getPerformerFirstRep();
             if (performerRef.hasIdentifier()) {
@@ -352,10 +354,32 @@ public class FhirParserService {
             }
         }
         
-        // Fallback: retorna "Goiânia" por enquanto
-        // Quando o script de geração incluir bairro, este método será atualizado para extrair
+        // 3. Fallback: retorna "Goiânia" por enquanto
         logger.debug("Bairro/região não encontrado no JSON, usando fallback 'Goiânia'");
         return "Goiânia";
+    }
+    
+    /**
+     * Extrai bairro da extension da Observation usando HAPI.
+     * Busca extension com URL: https://fhir.saude.go.gov.br/r4/core/StructureDefinition/bairro
+     */
+    private String extractBairroFromExtension(Observation observation) {
+        if (!observation.hasExtension()) {
+            return null;
+        }
+        
+        String bairroExtensionUrl = "https://fhir.saude.go.gov.br/r4/core/StructureDefinition/bairro";
+        
+        for (Extension extension : observation.getExtension()) {
+            if (bairroExtensionUrl.equals(extension.getUrl())) {
+                if (extension.hasValue() && extension.getValue() instanceof StringType) {
+                    String bairro = ((StringType) extension.getValue()).getValue();
+                    return bairro;
+                }
+            }
+        }
+        
+        return null;
     }
 
     public List<String> analyzeHemogram(HemogramData hemogram) {

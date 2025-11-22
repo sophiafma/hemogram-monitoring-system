@@ -9,14 +9,27 @@ import uuid
 from datetime import datetime, timedelta
 import os
 
-# Bairros de Goiânia para variar nos exemplos
+# Bairros de Goiânia (lista oficial - usar nomes exatos conforme lista fornecida)
 BAIRROS_GOIANIA = [
     "Setor Bueno", "Setor Oeste", "Setor Sul", "Setor Marista",
-    "Jardim Goiás", "Centro", "Setor Aeroporto", "Vila Nova",
-    "Jardim América", "Parque Amazônia", "Setor Campinas",
+    "Jardim Goias", "Setor Central", "Setor Aeroporto",
+    "Jardim America", "Parque Amazonia", "Setor Campinas",
     "Setor Leste Vila Nova", "Jardim Novo Mundo", "Setor Coimbra",
-    "Parque Industrial", "Setor Universitário", "Jardim Bela Vista",
-    "Setor Pedro Ludovico", "Setor Criméia", "Setor Faiçalville"
+    "Parque Industrial de Goiânia", "Setor Pedro Ludovico",
+    "Setor Uniao", "Setor Garavelo", "Setor Garavelo B",
+    "Setor Maria Celeste", "Setor Novo Horizonte", "Setor Orientville",
+    "Setor Sudoeste", "Setor dos Dourados", "Setor das nacoes extensao",
+    "Vila Nova", "Vila Morais", "Vila Adelia", "Vila Alto da Gloria",
+    "Vila Bandeirantes", "Vila Concordia", "Vila Legionarias",
+    "Vila Maria Luiza", "Vila Martins", "Vila Matilde", "Vila Romana",
+    "Jardim das Esmeraldas", "Jardim Santo Antonio", "Jardim Vitoria",
+    "Nova Suiça", "Serrinha", "Setor dos Afonsos",
+    "Setor Criméia Leste", "Setor Criméia Oeste", "Setor Norte Ferroviario",
+    "Setor Santos Dumont", "Setor Sao Jose", "Setor Leste Universitario",
+    "Vila Abaja", "Vila Aurora", "Vila Bethel", "Vila Canaa",
+    "Vila Santa Helena", "Vila Santa Isabel", "Vila Santa Rita",
+    "Vila Santa Tereza", "Vila Santana", "Vila Sao Francisco",
+    "Vila Sao Jose", "Vila Sao Luiz", "Vila Vera Cruz"
 ]
 
 # Cenários de teste
