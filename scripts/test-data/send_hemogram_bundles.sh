@@ -5,7 +5,7 @@ set -euo pipefail
 APP_URL="${APP_URL:-http://localhost:8081}"
 ENDPOINT="${ENDPOINT:-/fhir/direct-test}"
 TARGET_URL="${APP_URL}${ENDPOINT}"
-JSON_DIR="$(cd "$(dirname "$0")/../json-examples" && pwd)"
+JSON_DIR="$(cd "$(dirname "$0")/json-examples" && pwd)"
 
 echo "============================================================"
 echo "📤 Envio automático de Bundles FHIR gerados para testes"

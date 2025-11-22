@@ -294,7 +294,7 @@ def main():
     import random
     
     # Criar diretório de saída
-    output_dir = os.path.join(os.path.dirname(__file__), "..", "json-examples")
+    output_dir = os.path.join(os.path.dirname(__file__), "json-examples")
     os.makedirs(output_dir, exist_ok=True)
     
     print("=" * 60)

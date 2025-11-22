@@ -30,5 +30,8 @@ Thumbs.db
 *~
 
 # Dados gerados para testes
-test-data/json-examples/*.json
+scripts/test-data/json-examples/*.json
+
+# Pasta de contexto
+contexto/
 
