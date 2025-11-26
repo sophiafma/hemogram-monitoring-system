@@ -24,8 +24,8 @@ export const appConfig: ApplicationConfig = {
     provideRouter(routes),
     provideClientHydration(withEventReplay()),
     provideServiceWorker('ngsw-worker.js', {
-            // enabled: !isDevMode(),
-            enabled: true,
+            enabled: !isDevMode(),
+            // enabled: true,
             registrationStrategy: 'registerWhenStable:30000'
     }),
     provideFirebaseApp(() => initializeApp(firebaseConfig)),
