@@ -1,0 +1,85 @@
+.container {
+  font-family: 'Roboto', sans-serif;
+  max-width: 500px;
+  margin: 0 auto;
+  padding: 20px;
+  background-color: #f4f6f8;
+  min-height: 100vh;
+}
+
+header {
+  text-align: center;
+  margin-bottom: 30px;
+}
+
+header h1 { color: #2c3e50; margin-bottom: 5px; }
+header p { color: #7f8c8d; margin-top: 0; }
+
+/* Cards */
+.alert-card {
+  display: flex;
+  align-items: flex-start;
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 15px;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+  border-left: 8px solid #ccc;
+  animation: slideIn 0.4s ease-out;
+}
+
+.card-content { flex: 1; }
+
+.card-content h2 {
+  margin: 5px 0;
+  font-size: 1.2rem;
+  color: #333;
+}
+
+.card-content p {
+  color: #555;
+  line-height: 1.4;
+}
+
+.card-content small {
+  display: block;
+  margin-top: 10px;
+  color: #999;
+  font-size: 0.8rem;
+}
+
+/* Tipos de Alerta */
+.card-aviso {
+  border-left-color: #f1c40f; /* Amarelo */
+}
+.card-aviso .card-icon { font-size: 2rem; margin-right: 15px; }
+
+.card-perigo {
+  border-left-color: #e74c3c; /* Vermelho */
+  background-color: #fffbfb;
+}
+.card-perigo .card-icon { font-size: 2rem; margin-right: 15px; }
+
+/* Badge de Região */
+.region-badge {
+  background-color: #eef2f7;
+  color: #2980b9;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: bold;
+  text-transform: uppercase;
+}
+
+/* Estado Vazio */
+.sem-alertas {
+  text-align: center;
+  margin-top: 50px;
+  color: #7f8c8d;
+}
+.icon-safe { font-size: 3rem; margin-bottom: 10px; }
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}

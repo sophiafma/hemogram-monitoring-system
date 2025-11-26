@@ -1,0 +1,31 @@
+<div class="container">
+
+  <header>
+    <h1>🦟 Dengue Radar</h1>
+    <p>Monitoramento Regional</p>
+  </header>
+
+  <main>
+    <div *ngIf="alerts.length === 0" class="sem-alertas">
+      <div class="icon-safe">🛡️</div>
+      <p>Nenhum alerta recente na sua região.</p>
+    </div>
+
+    <div *ngFor="let alert of alerts"
+         class="alert-card"
+         [class.card-perigo]="alert.severidade === 'perigo'"
+         [class.card-aviso]="alert.severidade === 'aviso'">
+
+      <div class="card-icon">
+        {{ alert.severidade === 'perigo' ? '🚨' : '⚠️' }}
+      </div>
+
+      <div class="card-content">
+        <span class="region-badge">📍 {{ alert.regiao }}</span>
+        <h2>{{ alert.titulo }}</h2>
+        <p>{{ alert.mensagem }}</p>
+        <small>{{ alert.data | date:'dd/MM - HH:mm' }}</small>
+      </div>
+    </div>
+  </main>
+</div>
