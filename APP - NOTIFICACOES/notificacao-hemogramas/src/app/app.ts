@@ -1,19 +1,18 @@
 import { Component, inject, NgZone, OnInit } from '@angular/core';
-import { RouterOutlet } from '@angular/router';
 import { Messaging, getToken, onMessage } from '@angular/fire/messaging';
 import { DengueAlert } from './models/alert.model';
 import { CommonModule } from '@angular/common';
 
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet, CommonModule],
+  imports: [CommonModule],
   templateUrl: './app.html',
   styleUrl: './app.css'
 })
 export class App implements OnInit {
 
-  private messaging = inject(Messaging);
-  private zone = inject(NgZone);
+  private readonly messaging = inject(Messaging);
+  private readonly zone = inject(NgZone);
 
   vapidKey = "BDsM-mal2e8sAcNjyAx3e0WCkpSaez62YwQTwEhJy9pqBJHojjZuqd5uqXaX2aolDSdSMsKOr2SHoY7fSvkRfOE";
 
@@ -45,14 +44,13 @@ requestPermission() {
       const novoAlerta: DengueAlert = {
         titulo: payload.notification?.title || 'Alerta de Dengue',
         mensagem: payload.notification?.body || 'Cuidado com água parada.',
-        // O Java manda a região dentro de "data"
         regiao: payload.data?.['regiao'] || 'Geral',
         severidade: (payload.data?.['nivel'] === 'alto') ? 'perigo' : 'aviso',
         data: new Date()
       };
 
       this.zone.run(() => {
-        this.alerts.unshift(novoAlerta); // Adiciona o mais recente no topo
+        this.alerts.unshift(novoAlerta);
       });
     });
   }
